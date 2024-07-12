@@ -1,3 +1,66 @@
+// Implemented custom NodeFilter, since it's not fully supported by LWC
+// https://developer.mozilla.org/en-US/docs/Web/API/NodeFilter
+const NodeFilter = {
+    FILTER_ACCEPT: 1,
+    FILTER_REJECT: 2,
+    SHOW_ELEMENT: 1,
+    SHOW_TEXT: 4,
+};
+
+// Custom implementation of createNodeIterator native method, since it's not fully supported by Salesforce LWC or some frameworks which uses proxy objects (SecureElement, SecureDocument, SecureWindow), failing type checks due to incorrect instanceof match
+// https://developer.mozilla.org/en-US/docs/Web/API/Document/createNodeIterator
+function createNodeIterator(context, whatToShow, filter)
+{
+    const acceptedNodes = [];
+
+    function traverse(node)
+    {
+        switch(whatToShow) {
+            case NodeFilter.SHOW_ELEMENT:
+                if(node.nodeType === Node.ELEMENT_NODE) {
+                    if(filter && filter(node) !== NodeFilter.FILTER_ACCEPT) return;
+                    acceptedNodes.push(node);
+                }
+                break;
+            case NodeFilter.SHOW_TEXT:
+                if(node.nodeType === Node.TEXT_NODE) {
+                    if(filter && filter(node) !== NodeFilter.FILTER_ACCEPT) return;
+                    acceptedNodes.push(node);
+                }
+                break;
+            default: break;
+        }
+
+        let child = node.firstChild;
+        while(child)
+        {
+            traverse(child);
+            child = child.nextSibling;
+        }
+    }
+
+    traverse(context);
+
+    let currentIndex = -1;
+
+    return {
+        nextNode()
+        {
+            if(currentIndex + 1 >= acceptedNodes.length) return null;
+
+            currentIndex++;
+            return acceptedNodes[currentIndex];
+        },
+        previousNode()
+        {
+            if(currentIndex - 1 < 0) return null;
+            
+            currentIndex--;
+            return acceptedNodes[currentIndex];
+        }
+    };
+}
+
 /**
  * A NodeIterator with iframes support and a method to check if an element is
  * matching a specified selector
@@ -324,7 +387,7 @@ class DOMIterator {
    * @access protected
    */
   createIterator(ctx, whatToShow, filter) {
-    return document.createNodeIterator(ctx, whatToShow, filter, false);
+    return createNodeIterator(ctx, whatToShow, filter, false);
   }
 
   /**
